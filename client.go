@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/go-playground/form/v4"
@@ -16,7 +17,6 @@ type Client struct {
 	API_SECRECT  string
 	Redirect_URI string
 	ACCESS_TOKEN string
-	baseUrl      string
 	debug        bool
 	httpClient   *http.Client
 }
@@ -38,14 +38,13 @@ func NewClient(apikey, apisecrect, redirect_uri string) *Client {
 
 	httpclient := &http.Client{
 
-		Timeout: rEQUEST_TIMEOUT,
+		Timeout: request_timeout,
 	}
 
 	return &Client{
 		API_KEY:      apikey,
 		API_SECRECT:  apisecrect,
 		Redirect_URI: redirect_uri,
-		baseUrl:      bASE_URL,
 		debug:        false,
 		httpClient:   httpclient,
 	}
@@ -56,15 +55,26 @@ func (c *Client) SetDebug(debug bool) {
 }
 
 func (c *Client) doRequest(
+	baseurl string,
 	method string,
 	path string,
+	query url.Values,
 	body any,
 	contentType string,
 	result any,
 ) error {
 
 	// Build URL
-	url := c.baseUrl + path
+	u, err := url.Parse(baseurl + path)
+	if err != nil {
+		return fmt.Errorf("invalid url: %w", err)
+	}
+
+	if query != nil {
+		u.RawQuery = query.Encode()
+	}
+
+	finalURL := u.String()
 
 	// Prepare Body
 	var bodyReader io.Reader
@@ -101,10 +111,10 @@ func (c *Client) doRequest(
 	}
 
 	if c.debug {
-		fmt.Printf("[DEBUG] Request: %s %s\n", method, url)
+		fmt.Printf("[DEBUG] Request: %s %s\n", method, finalURL)
 	}
 
-	req, err := http.NewRequest(method, url, bodyReader)
+	req, err := http.NewRequest(method, finalURL, bodyReader)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -160,30 +170,46 @@ func (c *Client) doRequest(
 		return nil
 	}
 
-	// Decode response JSON
-	if err := json.Unmarshal(respBody, result); err != nil {
-		return fmt.Errorf("failed to unmarshal response JSON: %w; raw: %s",
-			err, string(respBody))
+	// Try to detect wrapped response
+	var envelope struct {
+		Status string          `json:"status"`
+		Data   json.RawMessage `json:"data"`
+		Errors json.RawMessage `json:"errors"`
+	}
+
+	if err := json.Unmarshal(respBody, &envelope); err == nil && envelope.Data != nil {
+		// Wrapped response → decode only data
+		if err := json.Unmarshal(envelope.Data, result); err != nil {
+			return fmt.Errorf("failed to unmarshal wrapped data: %w; raw: %s",
+				err, string(envelope.Data))
+		}
+	} else {
+		// Direct response → decode full body
+		if err := json.Unmarshal(respBody, result); err != nil {
+			return fmt.Errorf("failed to unmarshal response JSON: %w; raw: %s",
+				err, string(respBody))
+		}
 	}
 
 	if c.debug {
-		fmt.Printf("[DEBUG] Decoded Result: %+v\n\n\n", result)
+		fmt.Printf("[DEBUG] Decoded Result: %+v\n\n", result)
 	}
 
 	return nil
 }
 
-func (c *Client) doJSON(method string,
+func (c *Client) doJSON(baseurl, method string,
 	path string,
+	query url.Values,
 	body any,
 	result any) error {
-	return c.doRequest(method, path, body, "application/json", result)
+	return c.doRequest(baseurl, method, path, query, body, "application/json", result)
 }
 
-func (c *Client) doForm(method string,
+func (c *Client) doForm(baseurl, method string,
 	path string,
+	query url.Values,
 	body any,
 	result any) error {
-	return c.doRequest(method, path, body, "application/x-www-form-urlencoded", result)
+	return c.doRequest(baseurl, method, path, query, body, "application/x-www-form-urlencoded", result)
 }
-

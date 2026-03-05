@@ -16,7 +16,7 @@ type loginRequest struct {
 
 func (c *Client) GetRedirectURL() string {
 
-	u, _ := url.Parse(bASE_URL + rEQUEST_CODE_ENDPOINT)
+	u, _ := url.Parse(base_url1 + request_code_url)
 
 	q := u.Query()
 	q.Set("client_id", c.API_KEY)
@@ -57,7 +57,7 @@ func (c *Client) GenerateSession(requestCode string) error {
 	}
 
 	var upfr UserProfileResponse
-	err := c.doForm(http.MethodPost, aCCESS_TOKEN_ENDPOINT, lr, &upfr)
+	err := c.doForm(base_url1, http.MethodPost, access_token_endpoint, nil, lr, &upfr)
 	if err != nil {
 		return err
 	}
@@ -70,7 +70,7 @@ func (c *Client) GenerateSession(requestCode string) error {
 func (c *Client) UserProfile() (*UserProfileResponse, error) {
 
 	var upfr UserProfileResponse
-	err := c.doJSON(http.MethodGet, uUSER_PROFILE_ENDPOINT, nil, &upfr)
+	err := c.doJSON(base_url1, http.MethodGet, user_profile_endpoint, nil, nil, &upfr)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +78,10 @@ func (c *Client) UserProfile() (*UserProfileResponse, error) {
 	return &upfr, err
 }
 
+type AllFundMargin struct {
+	Equity    FundMargin `json:"equity"`
+	Commodity FundMargin `json:"commodity"`
+}
 type FundMargin struct {
 	UsedMargin      float64 `json:"used_margin"`
 	PayInAmount     float64 `json:"payin_amount"`
@@ -88,15 +92,15 @@ type FundMargin struct {
 	ExposureMargin  float64 `json:"exposure_margin"`
 }
 
-func (c *Client) UserFundAndMargin() (map[string]FundMargin, error) {
+func (c *Client) UserFundAndMargin() (*AllFundMargin, error) {
 
-	var fundMargin map[string]FundMargin
-	err := c.doJSON(http.MethodGet, uSer_FUND_MARGIN_ENDPOINT, nil, &fundMargin)
+	var fundMargin AllFundMargin
+	err := c.doJSON(base_url1, http.MethodGet, user_fund_margin_endpoint, nil, nil, &fundMargin)
 	if err != nil {
 		return nil, err
 	}
 
-	return fundMargin, err
+	return &fundMargin, err
 }
 
 func (c *Client) SetAccessToken(accessToken string) {
