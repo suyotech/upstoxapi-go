@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -13,19 +14,41 @@ import (
 const instrument_url = "https://assets.upstox.com/market-quote/instruments/exchange/complete.json.gz"
 const filepath = "./instruments.json"
 
-func DownloadInstruments() error {
+var instruments []Instrument
 
-	out, err := os.Create(filepath)
-	if err != nil {
-		return err
+func downloadInstruments() error {
+
+	info, err := os.Stat(filepath)
+
+	if err == nil {
+		ist, err := time.LoadLocation("Asia/Kolkata")
+		if err != nil {
+			return err
+		}
+
+		now := time.Now().In(ist)
+
+		cutoff := time.Date(
+			now.Year(),
+			now.Month(),
+			now.Day(),
+			8, 30, 0, 0,
+			ist,
+		)
+
+		modTime := info.ModTime().In(ist)
+
+		// file already updated today after 8:30
+		if modTime.After(cutoff) {
+			return nil
+		}
 	}
-
-	defer out.Close()
 
 	resp, err := http.Get(instrument_url)
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	gzReader, err := gzip.NewReader(resp.Body)
 	if err != nil {
@@ -33,27 +56,35 @@ func DownloadInstruments() error {
 	}
 	defer gzReader.Close()
 
+	out, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
 	_, err = io.Copy(out, gzReader)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	return nil
 }
 
-func LoadInstruments() ([]Instrument, error) {
+func LoadInstruments() error {
 
+	if err := downloadInstruments(); err != nil {
+		return err
+	}
 	data, err := os.ReadFile("./instruments.json")
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var instruments []Instrument
 	if err := json.Unmarshal(data, &instruments); err != nil {
-		return nil, err
+		return err
 	}
 
-	return instruments, nil
+	return nil
 }
 
 var (
@@ -77,20 +108,76 @@ var (
 )
 
 type InstrumentFilter struct {
-	Segment        string
-	Name           string
-	TradingSymbol  string
-	Exchange       string
-	InstrumentType string
-	Expiry         int64
-	StrikePrice    float64
+	Segment          string
+	Name             string
+	UnderlyingSymbol string
+	TradingSymbol    string
+	Exchange         string
+	InstrumentType   string
+	Expiry           string
+	StrikePrice      float64
 }
 
-func FindInstruments(filter InstrumentFilter, instruments []Instrument) ([]Instrument, error) {
+func GetExpiries(underlyingSymbol string, segment string, instrumentType string) ([]string, error) {
+
+	if instruments == nil {
+		err := LoadInstruments()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	expiryMap := make(map[int64]struct{})
+
+	for _, inst := range instruments {
+
+		if segment != "" && inst.Segment != segment {
+			continue
+		}
+
+		if underlyingSymbol != "" && inst.UnderlyingSymbol != underlyingSymbol {
+			continue
+		}
+
+		if instrumentType != "" && inst.InstrumentType != instrumentType {
+			continue
+		}
+
+		if inst.Expiry == 0 {
+			continue
+		}
+
+		expiryMap[inst.Expiry] = struct{}{}
+	}
+
+	var expires []int64
+	for exp := range expiryMap {
+		expires = append(expires, exp)
+	}
+
+	sort.Slice(expires, func(i, j int) bool {
+		return expires[i] < expires[j]
+	})
+
+	//convert to IST
+	ist, _ := time.LoadLocation("Asia/Kolkata")
+
+	result := make([]string, len(expires))
+
+	for i, e := range expires {
+		t := time.UnixMilli(e).In(ist)
+		result[i] = t.Format("2006-01-02")
+	}
+
+	return result, nil
+
+}
+
+func FindInstruments(filter InstrumentFilter) ([]Instrument, error) {
 
 	if instruments == nil {
 		var err error
-		instruments, err = LoadInstruments()
+		err = LoadInstruments()
 		if err != nil {
 			return nil, err
 		}
@@ -100,12 +187,22 @@ func FindInstruments(filter InstrumentFilter, instruments []Instrument) ([]Instr
 
 	for _, instrument := range instruments {
 
+		//by exchange
+		if filter.Exchange != "" && instrument.Exchange != filter.Exchange {
+			continue
+		}
+
 		//by segment
 		if filter.Segment != "" && instrument.Segment != filter.Segment {
 			continue
 		}
+
 		//by name
 		if filter.Name != "" && !strings.HasPrefix(instrument.Name, filter.Name) {
+			continue
+		}
+
+		if filter.UnderlyingSymbol != "" && instrument.UnderlyingSymbol != filter.UnderlyingSymbol {
 			continue
 		}
 
@@ -114,23 +211,25 @@ func FindInstruments(filter InstrumentFilter, instruments []Instrument) ([]Instr
 			continue
 		}
 
-		//by exchange
-		if filter.Exchange != "" && instrument.Exchange != filter.Exchange {
+		//by expiry
+		if filter.Expiry != "" {
+			expiryInt, err := ExpiryToTime(filter.Expiry)
+			if err != nil {
+				return nil, err
+			}
+
+			if instrument.Expiry == 0 || instrument.Expiry != *expiryInt {
+				continue
+			}
+		}
+
+		//by strike price
+		if filter.StrikePrice != 0 && (instrument.StrikePrice == 0 || instrument.StrikePrice != filter.StrikePrice) {
 			continue
 		}
 
 		//by instrument type
 		if filter.InstrumentType != "" && instrument.InstrumentType != filter.InstrumentType {
-			continue
-		}
-
-		//by expiry
-		if filter.Expiry != 0 && (instrument.Expiry == nil || *instrument.Expiry != filter.Expiry) {
-			continue
-		}
-
-		//by strike price
-		if filter.StrikePrice != 0 && (instrument.StrikePrice == nil || *instrument.StrikePrice != filter.StrikePrice) {
 			continue
 		}
 
@@ -150,42 +249,49 @@ type Instrument struct {
 	TradingSymbol  string `json:"trading_symbol"`
 
 	// Equity specific
-	ISIN          *string  `json:"isin,omitempty"`
-	ShortName     *string  `json:"short_name,omitempty"`
-	SecurityType  *string  `json:"security_type,omitempty"`
-	QtyMultiplier *float64 `json:"qty_multiplier,omitempty"`
+	ISIN          string  `json:"isin,omitempty"`
+	ShortName     string  `json:"short_name,omitempty"`
+	SecurityType  string  `json:"security_type,omitempty"`
+	QtyMultiplier float64 `json:"qty_multiplier,omitempty"`
 
 	// Derivatives (Futures / Options)
-	Weekly           *bool    `json:"weekly,omitempty"`
-	Expiry           *int64   `json:"expiry,omitempty"` // epoch millis
-	UnderlyingSymbol *string  `json:"underlying_symbol,omitempty"`
-	UnderlyingKey    *string  `json:"underlying_key,omitempty"`
-	UnderlyingType   *string  `json:"underlying_type,omitempty"`
-	StrikePrice      *float64 `json:"strike_price,omitempty"`
-	MinimumLot       *int     `json:"minimum_lot,omitempty"`
+	Weekly           bool    `json:"weekly,omitempty"`
+	Expiry           int64   `json:"expiry,omitempty"` // epoch millis
+	UnderlyingSymbol string  `json:"underlying_symbol,omitempty"`
+	UnderlyingKey    string  `json:"underlying_key,omitempty"`
+	UnderlyingType   string  `json:"underlying_type,omitempty"`
+	StrikePrice      float64 `json:"strike_price,omitempty"`
+	MinimumLot       int     `json:"minimum_lot,omitempty"`
 
 	// Lot & Tick
-	LotSize        *int     `json:"lot_size,omitempty"`
-	FreezeQuantity *float64 `json:"freeze_quantity,omitempty"`
-	TickSize       *float64 `json:"tick_size,omitempty"`
+	LotSize        int     `json:"lot_size,omitempty"`
+	FreezeQuantity float64 `json:"freeze_quantity,omitempty"`
+	TickSize       float64 `json:"tick_size,omitempty"`
 
 	// MTF
-	MTFEnabled *bool    `json:"mtf_enabled,omitempty"`
-	MTFBracket *float64 `json:"mtf_bracket,omitempty"`
+	MTFEnabled bool    `json:"mtf_enabled,omitempty"`
+	MTFBracket float64 `json:"mtf_bracket,omitempty"`
 
 	// MIS / Intraday
-	IntradayMargin   *float64 `json:"intraday_margin,omitempty"`
-	IntradayLeverage *float64 `json:"intraday_leverage,omitempty"`
+	IntradayMargin   float64 `json:"intraday_margin,omitempty"`
+	IntradayLeverage float64 `json:"intraday_leverage,omitempty"`
 }
 
-func (i *Instrument) ExpiryToTime(expiry string) (*int64, error) {
+func ExpiryToTime(expiry string) (*int64, error) {
 
 	epoch, err := time.Parse("2006-01-02", expiry)
 	if err != nil {
 		return nil, err
 	}
 
-	unixMilli := epoch.UnixMilli()
+	ist, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		return nil, err
+	}
+
+	midNight := time.Date(epoch.Year(), epoch.Month(), epoch.Day(), 23, 59, 59, 0, ist)
+
+	unixMilli := midNight.UnixMilli()
 	return &unixMilli, nil
 }
 
