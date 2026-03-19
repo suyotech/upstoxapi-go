@@ -5,19 +5,75 @@ import (
 	"net/url"
 )
 
+// PlaceOrderReq represents the payload used to submit an order to the broker.
+// All fields map directly to broker order parameters.
 type PlaceOrderReq struct {
-	Quantity          int64   `json:"quantity"`
-	Product           string  `json:"product"`
-	Validity          string  `json:"validity"`
-	Price             float64 `json:"price"`
-	Tag               string  `json:"tag"`
-	InstrumentToken   string  `json:"intrument_token"`
-	OrderType         string  `json:"order_type"`
-	TransactionType   string  `json:"transaction_type"`
-	DisclosedQuantiry int64   `json:"disclosed_quantity"`
-	TriggerPrice      float64 `json:"trigger_price"`
-	IsAMO             bool    `json:"is_amo"`
-	Slice             bool    `json:"slice"`
+
+	// Quantity is the number of units/lots to trade.
+	// Must be a valid lot size for the instrument.
+	// Example: 1, 25, 50
+	Quantity int64 `json:"quantity"`
+
+	// Product defines the product/margin type used for the order.
+	// Common values:
+	//   I   - Intraday
+	//   D   - Delivery
+	//   MTF - Margin Trading Facility
+	Product string `json:"product"`
+
+	// Validity defines how long the order remains active.
+	// Supported values:
+	//   DAY - Valid for the trading day
+	//   IOC - Immediate Or Cancel
+	Validity string `json:"validity"`
+
+	// Price is the order price.
+	// Required for LIMIT orders.
+	// Should be 0 for MARKET orders.
+	Price float64 `json:"price"`
+
+	// Tag is an optional custom identifier used by client systems
+	// to track or group orders (strategy ID, user ID, etc).
+	Tag string `json:"tag"`
+
+	// InstrumentToken uniquely identifies the tradable instrument
+	// in the broker system.
+	// Example: "NSE_FO|12345"
+	InstrumentToken string `json:"instrument_token"`
+
+	// OrderType defines how the order is executed.
+	// Supported values:
+	//   MARKET - Executes at best available price
+	//   LIMIT  - Executes at specified price
+	//   SL     - Stop Loss Limit
+	//   SL-M   - Stop Loss Market
+	OrderType string `json:"order_type"`
+
+	// TransactionType specifies order direction.
+	// Supported values:
+	//   BUY
+	//   SELL
+	TransactionType string `json:"transaction_type"`
+
+	// DisclosedQuantity is the portion of the total quantity
+	// visible in the market order book.
+	// Default: 0 (entire quantity disclosed).
+	DisclosedQuantiry int64 `json:"disclosed_quantity"`
+
+	// TriggerPrice is used for stop-loss orders (SL / SL-M).
+	// Ignored for MARKET and LIMIT orders.
+	// Default: 0
+	TriggerPrice float64 `json:"trigger_price"`
+
+	// IsAMO indicates whether the order is an After Market Order.
+	// true  -> AMO order
+	// false -> Regular market order
+	IsAMO bool `json:"is_amo"`
+
+	// Slice enables order slicing when quantity exceeds exchange limits.
+	// true  -> order will be automatically split
+	// false -> send as a single order
+	Slice bool `json:"slice"`
 }
 
 type OrderResp struct {
@@ -36,6 +92,7 @@ func (c *Client) PlaceOrder(params PlaceOrderReq) (*OrderResp, error) {
 }
 
 type ModifyOrderReq struct {
+	//ex. 1, 2 etc
 	Quantity          int64   `json:"quantity"`
 	Validity          string  `json:"validity"`
 	Price             float64 `json:"price"`

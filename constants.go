@@ -5,7 +5,7 @@ import "time"
 const (
 	base_url1 = "https://api.upstox.com/v2"
 	// base_url2 = "https://api.upstox.com/v3"
-	base_url3 = "https://hft-api.upstox.com/v3"
+	base_url3 = "https://api-hft.upstox.com/v3"
 	base_url4 = "https://api.upstox.com/v3"
 
 	// sandbox_url               = "https://api-hft.upstox.com/v3"

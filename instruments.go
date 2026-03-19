@@ -207,7 +207,7 @@ func FindInstruments(filter InstrumentFilter) ([]Instrument, error) {
 		}
 
 		//by trading symbol
-		if filter.TradingSymbol != "" && !strings.HasPrefix(instrument.TradingSymbol, filter.TradingSymbol) {
+		if filter.TradingSymbol != "" && instrument.TradingSymbol != filter.TradingSymbol {
 			continue
 		}
 
