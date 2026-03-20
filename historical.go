@@ -18,16 +18,16 @@ type Candle struct {
 }
 
 type CandleDataRequest struct {
-	InsrumentKey string
-	Unit         string
-	Timeframe    int64
-	FromDate     string
-	ToDate       string
+	InstrumentKey string
+	Unit          string
+	Timeframe     int64
+	FromDate      string
+	ToDate        string
 }
 
-func (c *Client) GetHistCandles(req *CandleDataRequest) (any, error) {
+func (c *Client) GetHistCandles(req *CandleDataRequest) ([]Candle, error) {
 
-	instrument := url.PathEscape(req.InsrumentKey)
+	instrument := url.PathEscape(req.InstrumentKey)
 	urlpath := fmt.Sprintf("%s/%s/%s/%d/%s/%s", get_candle_endpoint, instrument, req.Unit, req.Timeframe, req.ToDate, req.FromDate)
 	log.Println("encoded path : ", urlpath)
 
@@ -68,9 +68,9 @@ func convertCandles(raw [][]any) ([]Candle, error) {
 	return candles, nil
 }
 
-func (c *Client) GetIntradayCandles(req *CandleDataRequest) (any, error) {
+func (c *Client) GetIntradayCandles(req *CandleDataRequest) ([]Candle, error) {
 
-	instrument := url.PathEscape(req.InsrumentKey)
+	instrument := url.PathEscape(req.InstrumentKey)
 	urlpath := fmt.Sprintf("%s/%s/%s/%d", get_intraday_candle_endpoint, instrument, req.Unit, req.Timeframe)
 	log.Println("encoded path : ", urlpath)
 
