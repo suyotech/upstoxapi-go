@@ -123,3 +123,47 @@ func (c *Client) CancelOrder(orderdID string) (*OrderResp, error) {
 	}
 	return &orderResp, nil
 }
+
+type OrderBookItem struct {
+	Exchange          string  `json:"exchange"`
+	Product           string  `json:"product"`
+	Price             float64 `json:"price"`
+	Quantity          int64   `json:"quantity"`
+	Status            string  `json:"status"`
+	Guid              *string `json:"guid"`
+	Tag               *string `json:"tag"`
+	InstrumentToken   string  `json:"instrument_token"`
+	PlacedBy          string  `json:"placed_by"`
+	TradingSymbol     string  `json:"trading_symbol"`
+	TradingSymbolAlt  string  `json:"tradingsymbol"`
+	OrderType         string  `json:"order_type"`
+	Validity          string  `json:"validity"`
+	TriggerPrice      float64 `json:"trigger_price"`
+	DisclosedQuantity int64   `json:"disclosed_quantity"`
+	TransactionType   string  `json:"transaction_type"`
+	AveragePrice      float64 `json:"average_price"`
+	FilledQuantity    int64   `json:"filled_quantity"`
+	PendingQuantity   int64   `json:"pending_quantity"`
+	StatusMessage     *string `json:"status_message"`
+	StatusMessageRaw  *string `json:"status_message_raw"`
+	ExchangeOrderID   string  `json:"exchange_order_id"`
+	ParentOrderID     *string `json:"parent_order_id"`
+	OrderID           string  `json:"order_id"`
+	Variety           string  `json:"variety"`
+	OrderTimestamp    string  `json:"order_timestamp"`
+	ExchangeTimestamp *string `json:"exchange_timestamp"`
+	IsAMO             bool    `json:"is_amo"`
+	OrderRequestID    string  `json:"order_request_id"`
+	OrderRefID        string  `json:"order_ref_id"`
+}
+
+func (c *Client) GetOrderBook() ([]OrderBookItem, error) {
+	var orders []OrderBookItem
+
+	err := c.doJSON(base_url5, http.MethodGet, get_order_book_endpoint, nil, nil, &orders)
+	if err != nil {
+		return nil, err
+	}
+
+	return orders, nil
+}

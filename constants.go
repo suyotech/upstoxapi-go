@@ -7,6 +7,7 @@ const (
 	// base_url2 = "https://api.upstox.com/v3"
 	base_url3 = "https://api-hft.upstox.com/v3"
 	base_url4 = "https://api.upstox.com/v3"
+	base_url5 = "https://api.upstox.com/v2"
 
 	// sandbox_url               = "https://api-hft.upstox.com/v3"
 	request_timeout              = 30 * time.Second
@@ -19,4 +20,5 @@ const (
 	cancel_order_endpoint        = "/order/cancel"
 	get_candle_endpoint          = "/historical-candle"
 	get_intraday_candle_endpoint = "/historical-candle/intraday"
+	get_order_book_endpoint      = "/order/retrieve-all"
 )
