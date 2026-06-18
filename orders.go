@@ -77,8 +77,8 @@ type PlaceOrderReq struct {
 }
 
 type OrderResp struct {
-	OrderIds []string
-	MetaData map[string]string
+	OrderIds []string          `json:"order_ids"`
+	MetaData map[string]string `json:"metadata"`
 }
 
 func (c *Client) PlaceOrder(params PlaceOrderReq) (*OrderResp, error) {
