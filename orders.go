@@ -104,7 +104,7 @@ type ModifyOrderReq struct {
 
 func (c *Client) ModifyOrder(params ModifyOrderReq) (*OrderResp, error) {
 	var orderResp OrderResp
-	err := c.doJSON(base_url3, http.MethodPost, modify_order_endpoint, nil, params, &orderResp)
+	err := c.doJSON(base_url3, http.MethodPut, modify_order_endpoint, nil, params, &orderResp)
 	if err != nil {
 		return nil, err
 	}
