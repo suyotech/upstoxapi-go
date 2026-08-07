@@ -35,9 +35,7 @@ type ApiError struct {
 }
 
 func NewClient(apikey, apisecrect, redirect_uri string) *Client {
-
 	httpclient := &http.Client{
-
 		Timeout: request_timeout,
 	}
 
@@ -52,6 +50,32 @@ func NewClient(apikey, apisecrect, redirect_uri string) *Client {
 
 func (c *Client) SetDebug(debug bool) {
 	c.debug = debug
+}
+
+// SetProxy configures a static HTTP(S) proxy for all REST requests.
+// Pass an empty string to restore the default HTTP transport.
+func (c *Client) SetProxy(proxyURL string) error {
+	if proxyURL == "" {
+		c.httpClient.Transport = nil
+		return nil
+	}
+
+	proxy, err := url.Parse(proxyURL)
+	if err != nil {
+		return fmt.Errorf("invalid proxy URL: %w", err)
+	}
+	if proxy.Host == "" || (proxy.Scheme != "http" && proxy.Scheme != "https") {
+		return fmt.Errorf("invalid proxy URL: expected http:// or https:// proxy with host")
+	}
+
+	transport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return fmt.Errorf("unsupported default HTTP transport type %T", http.DefaultTransport)
+	}
+	proxyTransport := transport.Clone()
+	proxyTransport.Proxy = http.ProxyURL(proxy)
+	c.httpClient.Transport = proxyTransport
+	return nil
 }
 
 func (c *Client) doRequest(
